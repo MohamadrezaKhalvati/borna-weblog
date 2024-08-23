@@ -9,13 +9,14 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Cache } from 'cache-manager';
+import { cleanDeep } from 'src/common/clean-deep';
 import { Repository } from 'typeorm';
 import { NodeMailerService } from '../node-mailer/node-mailer.service';
 import { SubmitChangePasswordInput } from './dto/change-password.input';
 import { CreateUserInput } from './dto/create-user.input';
 import { LoginInput } from './dto/login.input';
 import { SendChangePasswordCodeInput } from './dto/send-change-password-code.input';
-import { UpdateUserRoleInput } from './dto/update-user.input';
+import { UpdateUserInput } from './dto/update-user.input';
 import { VerifyCodeInput } from './dto/verify-code.input';
 import { Role, User } from './entities/user.entity';
 import { JwtPayloadType } from './guards/token.guard';
@@ -109,7 +110,7 @@ export class AuthService {
     const { email, password } = input;
     const user = await this.userRepository.findOne({
       where: {
-        email: email.toLowerCase(),
+        email: email,
       },
     });
 
@@ -126,7 +127,7 @@ export class AuthService {
     const user = await this.verifyUserForLogin(input);
     const payload: JwtPayloadType = {
       id: user.id,
-      username: user.username.toLowerCase(),
+      username: user.username,
       role: user.role,
     };
 
@@ -147,12 +148,22 @@ export class AuthService {
     return user;
   }
 
-  async updateUserRole(input: UpdateUserRoleInput) {
-    const { id, role } = input;
+  async updateUser(input: UpdateUserInput) {
+    const { id } = input;
+
     const user = await this.verifyIfUserExistance(id);
 
-    user.role = role;
-    return await this.userRepository.save(user);
+    if (!user) {
+      throw new NotFoundException('User with this email does not exist');
+    }
+
+    const computedData = cleanDeep(input);
+    const updatedUser = await this.userRepository.save({
+      ...user,
+      ...computedData,
+    });
+
+    return updatedUser;
   }
 
   async sendChangePasswordCode(input: SendChangePasswordCodeInput) {

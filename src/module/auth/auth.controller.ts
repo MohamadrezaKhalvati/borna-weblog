@@ -1,12 +1,14 @@
 import { Body, Controller, Post, Put } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { Roles } from './decorator/roles.decorator';
 import { SubmitChangePasswordInput } from './dto/change-password.input';
 import { CreateUserInput } from './dto/create-user.input';
 import { LoginInput } from './dto/login.input';
 import { SendChangePasswordCodeInput } from './dto/send-change-password-code.input';
-import { UpdateUserRoleInput } from './dto/update-user.input';
+import { UpdateUserInput } from './dto/update-user.input';
 import { VerifyCodeInput } from './dto/verify-code.input';
+import { Role } from './entities/user.entity';
 
 @Controller('auth')
 @ApiTags('Auth')
@@ -44,13 +46,16 @@ export class AuthController {
     return await this.authService.login(input);
   }
 
-  @Put('updateUserRole')
+  @Put('updateUser')
   @ApiOperation({
-    operationId: 'UpdateUserRole',
-    summary: 'Update a user role',
+    operationId: 'updateUser',
+    summary: 'Update a user ',
   })
-  async updateUserRole(@Body() input: UpdateUserRoleInput) {
-    return await this.authService.updateUserRole(input);
+  @ApiBody({ type: UpdateUserInput })
+  @ApiResponse({ status: 200, description: 'User  updated successfully' })
+  @Roles(Role.Admin)
+  async updateUser(@Body() input: UpdateUserInput) {
+    return await this.authService.updateUser(input);
   }
 
   @Post('sendChangePasswordCode')
