@@ -11,8 +11,10 @@ import * as bcrypt from 'bcrypt';
 import { Cache } from 'cache-manager';
 import { Repository } from 'typeorm';
 import { NodeMailerService } from '../node-mailer/node-mailer.service';
+import { SubmitChangePasswordInput } from './dto/change-password.input';
 import { CreateUserInput } from './dto/create-user.input';
 import { LoginInput } from './dto/login.input';
+import { SendChangePasswordCodeInput } from './dto/send-change-password-code.input';
 import { UpdateUserRoleInput } from './dto/update-user.input';
 import { VerifyCodeInput } from './dto/verify-code.input';
 import { Role, User } from './entities/user.entity';
@@ -144,11 +146,62 @@ export class AuthService {
     }
     return user;
   }
+
   async updateUserRole(input: UpdateUserRoleInput) {
     const { id, role } = input;
     const user = await this.verifyIfUserExistance(id);
 
     user.role = role;
     return await this.userRepository.save(user);
+  }
+
+  async sendChangePasswordCode(input: SendChangePasswordCodeInput) {
+    const { email } = input;
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User with this email does not exist');
+    }
+    const verifyNumber = this.generateRandomNummber();
+    await this.cacheService.set(`changePasswordCode:${email}`, verifyNumber, {
+      ttl: 100,
+    });
+
+    await this.nodeMailerService.sendChangePasswordEmail(email, verifyNumber);
+
+    return {
+      message: 'Code has been sent to your email',
+      email: email,
+    };
+  }
+
+  async submitChangePassowrd(input: SubmitChangePasswordInput) {
+    const { email, newPassword, code } = input;
+    const cachedCode = await this.cacheService.get<string>(
+      `changePasswordCode:${email}`,
+    );
+
+    if (!cachedCode) {
+      throw new NotFoundException('Verification code not found or expired');
+    }
+
+    if (cachedCode !== code) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const hashedPassword = await this.createHashedPassword(newPassword);
+
+    user.password = hashedPassword;
+
+    await this.userRepository.save(user);
+
+    return {
+      message: 'Password changed successfully',
+    };
   }
 }
