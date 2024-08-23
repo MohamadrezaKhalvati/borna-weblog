@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { CreateUserInput } from './dto/create-user.input';
 import { LoginInput } from './dto/login.input';
 import { UpdateUserRoleInput } from './dto/update-user.input';
+import { VerifyCodeInput } from './dto/verify-code.input';
 
 @Controller('auth')
 @ApiTags('Auth')
@@ -21,6 +22,16 @@ export class AuthController {
     return await this.authService.createUser(input);
   }
 
+  @Post('verify')
+  @ApiOperation({ operationId: 'VerifyUser', summary: 'Verify a user' })
+  @ApiBody({ type: VerifyCodeInput })
+  async verifyUser(@Body() input: VerifyCodeInput) {
+    const user = await this.authService.verifyUserCode(input);
+    return {
+      message: 'User verified successfully',
+      user,
+    };
+  }
   @Post('login')
   @ApiOperation({ operationId: 'login', summary: 'Login a user' })
   @ApiBody({ type: LoginInput })

@@ -1,21 +1,28 @@
 import {
   BadRequestException,
+  CACHE_MANAGER,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { Cache } from 'cache-manager';
 import { Repository } from 'typeorm';
+import { NodeMailerService } from '../node-mailer/node-mailer.service';
 import { CreateUserInput } from './dto/create-user.input';
 import { LoginInput } from './dto/login.input';
 import { UpdateUserRoleInput } from './dto/update-user.input';
+import { VerifyCodeInput } from './dto/verify-code.input';
 import { Role, User } from './entities/user.entity';
 import { JwtPayloadType } from './guards/token.guard';
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User) private userRepository: Repository<User>,
+    @Inject(CACHE_MANAGER) private cacheService: Cache,
+    private nodeMailerService: NodeMailerService,
     private jwt: JwtService,
   ) {}
 
@@ -35,8 +42,45 @@ export class AuthService {
       user = this.userRepository.create({ ...input, role: Role.User });
     }
 
-    // Save the user to the database
+    const verifyNumber = this.generateRandomNummber();
+
+    await this.cacheService.set(`verificationCode:${email}`, verifyNumber, {
+      ttl: 100,
+    });
+
+    await this.nodeMailerService.sendVerificationEmail(email, verifyNumber);
+
     return await this.userRepository.save(user);
+  }
+
+  async verifyUserCode(input: VerifyCodeInput) {
+    const { email, verificationCode } = input;
+    const cachedCode = await this.cacheService.get<string>(
+      `verificationCode:${email}`,
+    );
+
+    if (!cachedCode) {
+      throw new NotFoundException('Verification code not found or expired');
+    }
+
+    if (cachedCode !== verificationCode) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    const user = await this.userRepository.findOneBy({ email });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.verifyed = true;
+    await this.userRepository.save(user);
+    await this.cacheService.del(`verificationCode:${email}`);
+
+    return user;
+  }
+
+  private generateRandomNummber() {
+    return Math.floor(100000 + Math.random() * 900000);
   }
 
   private async verifyIsUsernameUniqe(username: string) {
