@@ -38,6 +38,6 @@ async function bootstrap() {
   setupCors(app);
 
   await app.listen(3000);
-  logger.log('Application is running on: 3001');
+  logger.log('Application is running on: 3000');
 }
 bootstrap();
